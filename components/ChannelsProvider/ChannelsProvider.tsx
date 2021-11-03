@@ -23,9 +23,8 @@ const ChannelsProvider: React.FC = ({ children }) => {
     defaultChannel?.slug
   );
 
-  const currentChannel = channels.find(
-    ({ slug }) => slug === currentChannelSlug
-  ) as Channel;
+  const currentChannel =
+    channels.find(({ slug }) => slug === currentChannelSlug) || defaultChannel;
 
   const providerValues: ChannelsConsumerProps = {
     channels,
