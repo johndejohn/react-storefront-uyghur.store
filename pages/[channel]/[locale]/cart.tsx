@@ -3,15 +3,19 @@ import React, { ReactElement } from "react";
 import { useLocalStorage } from "react-use";
 
 import { CartSummary, CheckoutLineItem, Layout, Spinner } from "@/components";
+import { useRegions } from "@/components/RegionsProvider";
 import { BaseSeo } from "@/components/seo/BaseSeo";
 import { CHECKOUT_TOKEN } from "@/lib/const";
+import { usePaths } from "@/lib/paths";
 import { useCheckoutByTokenQuery } from "@/saleor/api";
 
 const Cart = () => {
+  const paths = usePaths();
+  const { query } = useRegions();
   const [token] = useLocalStorage<string>(CHECKOUT_TOKEN);
   const { data, loading, error } = useCheckoutByTokenQuery({
     fetchPolicy: "network-only",
-    variables: { checkoutToken: token },
+    variables: { checkoutToken: token, locale: query.locale },
     skip: !token,
   });
 
@@ -34,7 +38,7 @@ const Cart = () => {
                 Your Cart
               </h1>
               <div>
-                <Link href="/">
+                <Link href={paths.$url()}>
                   <a className="text-sm ">Continue Shopping</a>
                 </Link>
               </div>
@@ -59,7 +63,7 @@ const Cart = () => {
               <div>
                 <CartSummary checkout={data.checkout} />
                 <div className="mt-12">
-                  <Link href="/checkout">
+                  <Link href={paths.checkout.$url()}>
                     <a className="block w-full bg-blue-500 border border-transparent rounded-md shadow-sm py-3 px-4 text-center font-medium text-white hover:bg-blue-700">
                       Checkout
                     </a>

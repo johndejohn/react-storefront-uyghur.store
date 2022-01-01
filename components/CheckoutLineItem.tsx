@@ -1,8 +1,10 @@
 import clsx from "clsx";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import React from "react";
 
+import { translate } from "@/lib/translations";
 import {
   CheckoutLineDetailsFragment,
   ErrorDetailsFragment,
@@ -10,12 +12,19 @@ import {
   useRemoveProductFromCheckoutMutation,
 } from "@/saleor/api";
 
+import { usePaths } from "../lib/paths";
+import { useRegions } from "./RegionsProvider";
+
 interface CheckoutLineItemProps {
   line: CheckoutLineDetailsFragment;
   token: string;
 }
 
 export const CheckoutLineItem = ({ line, token }: CheckoutLineItemProps) => {
+  const paths = usePaths();
+  const router = useRouter();
+  const { query } = useRegions();
+
   const [checkoutLineUpdateMutation, { loading: loadingLineUpdate }] =
     useCheckoutLineUpdateMutation();
   const [removeProductFromCheckout] = useRemoveProductFromCheckoutMutation();
@@ -47,6 +56,7 @@ export const CheckoutLineItem = ({ line, token }: CheckoutLineItemProps) => {
             variantId: line?.variant.id || "",
           },
         ],
+        locale: query.locale,
       },
     });
     const errors = result.data?.checkoutLinesUpdate?.errors;
@@ -72,15 +82,19 @@ export const CheckoutLineItem = ({ line, token }: CheckoutLineItemProps) => {
           <div className="flex justify-between">
             <div className="pr-6">
               <h3 className="text-xl font-bold">
-                <Link href={`/product/${line?.variant.product?.slug}`}>
+                <Link
+                  href={paths.products
+                    ._slug(line?.variant?.product?.slug)
+                    .$url()}
+                >
                   <a className="font-medium text-gray-700 hover:text-gray-800">
-                    {line?.variant.product?.name}
+                    {translate(line?.variant.product, "name")}
                   </a>
                 </Link>
               </h3>
               <h4 className="text-m font-regular">
                 <a className="text-gray-700 hover:text-gray-800">
-                  {line?.variant?.name}
+                  {translate(line?.variant, "name")}
                 </a>
               </h4>
 
@@ -91,6 +105,7 @@ export const CheckoutLineItem = ({ line, token }: CheckoutLineItemProps) => {
                     variables: {
                       checkoutToken: token,
                       lineId: line?.id,
+                      locale: query.locale,
                     },
                   })
                 }

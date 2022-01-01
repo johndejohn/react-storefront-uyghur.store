@@ -1,7 +1,11 @@
 import { ApolloQueryResult } from "@apollo/client";
 import { useAuthState } from "@saleor/sdk";
 import clsx from "clsx";
-import { GetStaticPropsContext, InferGetStaticPropsType } from "next";
+import {
+  GetStaticPaths,
+  GetStaticPropsContext,
+  InferGetStaticPropsType,
+} from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Custom404 from "pages/404";
@@ -11,38 +15,51 @@ import { useLocalStorage } from "react-use";
 import { Layout, RichText, VariantSelector } from "@/components";
 import { AttributeDetails } from "@/components/product/AttributeDetails";
 import { ProductGallery } from "@/components/product/ProductGallery";
+import { useRegions } from "@/components/RegionsProvider";
 import { ProductPageSeo } from "@/components/seo/ProductPageSeo";
 import { CHECKOUT_TOKEN } from "@/lib/const";
 import apolloClient from "@/lib/graphql";
+import { usePaths } from "@/lib/paths";
 import { getSelectedVariantID } from "@/lib/product";
+import {
+  contextToRegionQuery,
+  DEFAULT_LOCALE,
+  localeToEnum,
+} from "@/lib/regions";
+import { productPaths } from "@/lib/ssr/product";
+import { translate } from "@/lib/translations";
 import {
   CheckoutError,
   ProductBySlugDocument,
   ProductBySlugQuery,
-  ProductPathsDocument,
-  ProductPathsQuery,
+  ProductBySlugQueryVariables,
   useCheckoutAddProductLineMutation,
   useCheckoutByTokenQuery,
   useCreateCheckoutMutation,
 } from "@/saleor/api";
 
+export type OptionalQuery = {
+  variant?: string;
+};
+
 const ProductPage = ({
-  productSSG,
+  product,
 }: InferGetStaticPropsType<typeof getStaticProps>) => {
   const router = useRouter();
+  const paths = usePaths();
+  const { currentChannel } = useRegions();
   const [checkoutToken, setCheckoutToken] = useLocalStorage(CHECKOUT_TOKEN);
   const [createCheckout] = useCreateCheckoutMutation();
   const { user } = useAuthState();
-
+  const locale = router.query.locale?.toString() || DEFAULT_LOCALE;
   const { data: checkoutData } = useCheckoutByTokenQuery({
-    variables: { checkoutToken },
+    variables: { checkoutToken, locale: localeToEnum(locale) },
     skip: !checkoutToken || !process.browser,
   });
   const [addProductToCheckout] = useCheckoutAddProductLineMutation();
   const [loadingAddToCheckout, setLoadingAddToCheckout] = useState(false);
   const [addToCartError, setAddToCartError] = useState("");
 
-  const product = productSSG?.data?.product;
   if (!product?.id) {
     return <Custom404 />;
   }
@@ -70,6 +87,7 @@ const ProductPage = ({
         variables: {
           checkoutToken: checkoutToken,
           variantId: selectedVariantID,
+          locale: localeToEnum(locale),
         },
       });
       addToCartData?.checkoutLinesAdd?.errors.forEach((e) => {
@@ -82,6 +100,7 @@ const ProductPage = ({
       const { data: createCheckoutData } = await createCheckout({
         variables: {
           email: user?.email || "anonymous@example.com",
+          channel: currentChannel.slug,
           lines: [
             {
               quantity: 1,
@@ -104,7 +123,7 @@ const ProductPage = ({
 
     if (errors.length === 0) {
       // Product successfully added, redirect to cart page
-      router.push("/cart");
+      router.push(paths.cart.$url());
       return;
     }
 
@@ -121,6 +140,8 @@ const ProductPage = ({
     selectedVariant?.quantityAvailable === 0 ||
     loadingAddToCheckout;
 
+  const description = translate(product, "description");
+
   return (
     <>
       <ProductPageSeo product={product} />
@@ -135,13 +156,18 @@ const ProductPage = ({
         <div className="space-y-8 mt-10 md:mt-0">
           <div>
             <h1 className="text-4xl font-bold tracking-tight text-gray-800">
-              {product?.name}
+              {translate(product, "name")}
             </h1>
-            <Link href={`/category/${product?.category?.slug}`} passHref>
-              <p className="text-lg mt-2 font-medium text-gray-600 cursor-pointer">
-                {product?.category?.name}
-              </p>
-            </Link>
+            {!!product.category?.slug && (
+              <Link
+                href={paths.category._slug(product?.category?.slug).$url()}
+                passHref
+              >
+                <p className="text-lg mt-2 font-medium text-gray-600 cursor-pointer">
+                  {translate(product.category, "name")}
+                </p>
+              </Link>
+            )}
           </div>
 
           <VariantSelector
@@ -171,9 +197,9 @@ const ProductPage = ({
 
           {!!addToCartError && <p>{addToCartError}</p>}
 
-          {product?.description && (
+          {description && (
             <div className="text-base text-gray-700 space-y-6">
-              <RichText jsonStringData={product.description} />
+              <RichText jsonStringData={description} />
             </div>
           )}
 
@@ -189,35 +215,27 @@ const ProductPage = ({
 
 export default ProductPage;
 
-export async function getStaticPaths() {
-  const result: ApolloQueryResult<ProductPathsQuery | undefined> =
-    await apolloClient.query({
-      query: ProductPathsDocument,
-      variables: {},
-    });
-  const paths =
-    result.data?.products?.edges.map(({ node }) => ({
-      params: { slug: node.slug },
-    })) || [];
-
+export const getStaticPaths: GetStaticPaths = async () => {
+  const paths = await productPaths();
   return {
     paths,
-    fallback: "blocking",
+    fallback: true,
   };
-}
+};
 
 export const getStaticProps = async (context: GetStaticPropsContext) => {
-  const productSlug = context.params?.slug?.toString();
-  const data: ApolloQueryResult<ProductBySlugQuery | undefined> =
-    await apolloClient.query({
+  const productSlug = context.params?.slug?.toString()!;
+  const response: ApolloQueryResult<ProductBySlugQuery> =
+    await apolloClient.query<ProductBySlugQuery, ProductBySlugQueryVariables>({
       query: ProductBySlugDocument,
       variables: {
         slug: productSlug,
+        ...contextToRegionQuery(context),
       },
     });
   return {
     props: {
-      productSSG: data,
+      product: response.data.product,
     },
     revalidate: 60, // value in seconds, how often ISR will trigger on the server
   };
