@@ -180,7 +180,7 @@ const ProductPage = ({
             type="submit"
             disabled={isAddToCartButtonDisabled}
             className={clsx(
-              "max-w-xs w-full bg-blue-500 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-white hover:bg-blue-600 focus:outline-none",
+              "max-w-xs w-full bg-blue-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-white hover:bg-blue-700 focus:outline-none",
               isAddToCartButtonDisabled && "bg-gray-400 hover:bg-gray-400"
             )}
           >
@@ -216,10 +216,11 @@ const ProductPage = ({
 export default ProductPage;
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const paths = await productPaths();
+  // Temporally do not render all possible products during the build time
+  // const paths = await productPaths();
   return {
-    paths,
-    fallback: true,
+    paths: [],
+    fallback: "blocking",
   };
 };
 
